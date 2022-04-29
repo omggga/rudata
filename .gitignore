@@ -1,0 +1,13 @@
+node_modules/
+tmp/
+.logs/
+.pids/
+npm-debug.log
+
+# VS Code files
+.vscode/
+
+data/*.*
+!data/README.md
+
+.env
