@@ -3,8 +3,8 @@
 const assert = require('assert')
 const moment = require('moment')
 
-const Api = require('../api')
-const config = require('../config')
+const Api = require('./api')
+const config = require('./config')
 const utils = require('./utils')
 
 describe('runner.js', () => {
