@@ -224,12 +224,12 @@ function getFilters(data) {
 	if (packageData) {
 		filtersList = jsonFilters['filters-list'][0]['filters']
 		if (!filtersList) {
-			throw new NotRepeatError(`Получен неверный список фильтров для пакетного запроса.`)
+			throw new Error(`Получен неверный список фильтров для пакетного запроса.`)
 		}
 	} else {
 		filtersList = jsonFilters['filters'][0]
 		if (!filtersList) {
-			throw new NotRepeatError(`Получен неверный список фильтров для запроса.`)
+			throw new Error(`Получен неверный список фильтров для запроса.`)
 		}
 	}
 	return { filtersList, packageData }
