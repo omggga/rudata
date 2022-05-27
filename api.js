@@ -57,6 +57,35 @@ const route = {
 	getCompanyRatingsHist: {
 		url: 'Rating/CompanyRatingsHist/',
 		insertID: 'id'
+	},
+	getShareDividend: {
+		url: 'Info/ShareDividend/',
+		defaults: {
+			pageNum: 1,
+			pageSize: 1000
+		},
+		havePages: true
+	},
+	getShareDividendById: {
+		url: 'Info/ShareDividend/',
+		defaults: {
+			pageNum: 1,
+			pageSize: 1000
+		},
+		havePages: true,
+		insertID: 'id'
+	},
+	getCorporateActions: {
+		url: 'CorporateAction/Actions/',
+		defaults: {
+			count: 20000
+		}
+	},
+	getCurrencyRate: {
+		url: 'Archive/CurrencyRate/'
+	},
+	getEndOfDay: {
+		url: 'Archive/EndOfDay/'
 	}
 }
 
@@ -91,56 +120,102 @@ class Api {
 	}
 
 	//Итоги торгов по инструментам за период на различных площадках
-	getEndOfDayOnExchanges(filters) {
-		return this.get(route['getEndOfDayOnExchanges'], filters)
+	getEndOfDayOnExchanges(filters, packageData) {
+		return this.get(route['getEndOfDayOnExchanges'], filters, packageData)
 	}
 
 	//Получить краткий справочник по торговым инструментам
-	getInstruments(filters) {
-		return this.get(route['getInstruments'], filters)
+	getInstruments(filters, packageData) {
+		return this.get(route['getInstruments'], filters, packageData)
 	}
 
 	//Итоги торгов по инструментам за период на различных площадках
-	getSecurities(filters) {
-		return this.get(route['getSecurities'], filters)
+	getSecurities(filters, packageData) {
+		return this.get(route['getSecurities'], filters, packageData)
 	}
 
 	//Выборка состава индексов
-	getConstituents(filters) {
-		return this.get(route['getConstituents'], filters)
+	getConstituents(filters, packageData) {
+		return this.get(route['getConstituents'], filters, packageData)
 	}
 
 	//Получить данные о торгах за указанный период
-	getArchiveHistory(filters) {
-		return this.get(route['getArchiveHistory'], filters)
+	getArchiveHistory(filters, packageData) {
+		return this.get(route['getArchiveHistory'], filters, packageData)
 	}
 
 	//Получить рейтинги инструмента, его эмитента и основных организаторов выпуска
-	getSecurityRatingsHist(filters) {
-		return this.get(route['getSecurityRatingsHist'], filters)
+	getSecurityRatingsHist(filters, packageData) {
+		return this.get(route['getSecurityRatingsHist'], filters, packageData)
 	}
 
 	//Значения безрисковых кривых на дату
-	getRiskFee(filters) {
-		return this.get(route['getRiskFee'], filters)
+	getRiskFee(filters, packageData) {
+		return this.get(route['getRiskFee'], filters, packageData)
 	}
 
 	//Получить классификацию выпуска
-	getClassification(filters) {
-		return this.get(route['getClassification'], filters)
+	getClassification(filters, packageData) {
+		return this.get(route['getClassification'], filters, packageData)
 	}
 
 	//Получить параметры облигации, зависимые от даты
-	getDateOptions(filters) {
-		return this.get(route['getDateOptions'], filters)
+	getDateOptions(filters, packageData) {
+		return this.get(route['getDateOptions'], filters, packageData)
 	}
 
 	//Получить рейтинги компании за период
-	getCompanyRatingsHist(filters) {
-		return this.get(route['getCompanyRatingsHist'], filters)
+	getCompanyRatingsHist(filters, packageData) {
+		return this.get(route['getCompanyRatingsHist'], filters, packageData)
 	}
 
-	async get(optionsConfig, filters) {
+	//Информация по дивидендам
+	getShareDividend(filters, packageData) {
+		return this.get(route['getShareDividend'], filters, packageData)
+	}
+
+	//Информация по дивидендам для конкретной организации
+	getShareDividendById(filters, packageData) {
+		return this.get(route['getShareDividendById'], filters, packageData)
+	}
+
+	//Получить корпоративные действия
+	getCorporateActions(filters, packageData) {
+		return this.get(route['getCorporateActions'], filters, packageData)
+	}
+
+	//Получить кросс-курс двух валют
+	getCurrencyRate(filters, packageData) {
+		return this.get(route['getCurrencyRate'], filters, packageData)
+	}
+
+	//Получить данные по результатам торгов на заданную дату
+	getEndOfDay(filters, packageData) {
+		return this.get(route['getEndOfDay'], filters, packageData)
+	}
+
+	async get(optionsConfig, filters, packageData) {
+		if (!packageData) {
+			const data = await this.getData(optionsConfig, filters)
+			return utils.obj2xml({ 'item-list': { item: data } })
+		}
+
+		let result = []
+		for (let filter of filters) {
+			const tag = Object.keys(filter).filter((k) => k.startsWith('@'))
+			const data = await this.getData(optionsConfig, filter)
+			result.push({ 'item-list': { [tag[0]]: filter[tag[0]], item: data } })
+		}
+
+		let xml = '<list>'
+		for (let res of result) {
+			xml += utils.obj2xml({ 'item-list': res['item-list'] })
+		}
+		xml += '</list>'
+		return xml
+	}
+
+	async getData(optionsConfig, filters) {
 		const options = {
 			method: 'POST',
 			headers: {
@@ -152,7 +227,6 @@ class Api {
 		let total
 		const requestOptions = this.parseFilters(filters, optionsConfig.defaults)
 		if (optionsConfig.havePages) {
-			//Processing api routes with pagination in response
 			total = []
 			let processing = true
 			while (processing) {
@@ -167,13 +241,12 @@ class Api {
 				requestOptions.pageNum++
 			}
 		} else {
-			//Process raw data witouth pages
 			options.body = JSON.stringify(requestOptions)
 			// prettier-ignore
 			total = await this.request(`${config.rudat.url}/${optionsConfig.url}${optionsConfig.insertID ? filters[optionsConfig.insertID] : ''}`, options)
 		}
 
-		return utils.obj2xml({ 'item-list': { item: total } })
+		return total
 	}
 
 	async request(url, options) {
