@@ -14,7 +14,7 @@
     "abort-controller": "^3.0.0",
     "dotenv": "^16.0.0",
     "fast-xml-parser": "^3.17.4",
-    "moment": "^2.29.3",
+    "moment": "^2.29.4",
     "node-fetch": "^2.6.1"
   },
   "devDependencies": {
