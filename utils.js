@@ -2,8 +2,9 @@
 
 const fetch = require('node-fetch')
 const AbortController = require('abort-controller')
-const xmlParser = require('fast-xml-parser')
-const Parser = require('fast-xml-parser').j2xParser
+const { XMLParser, XMLBuilder, XMLValidator } = require('fast-xml-parser')
+
+const RM_PI_REGEX = /<\?(?!xml ).*?\?>[\r\n]*/g
 
 const defaultProps = {
 	method: 'GET',
@@ -67,22 +68,23 @@ const xml2jsonOptions = {
 const json2xmlOptions = {
 	attributeNamePrefix: '@',
 	ignoreAttributes: false,
-	supressEmptyNode: true,
-	tagValueProcessor: (value) => escapeValue(value),
-	attrValueProcessor: (value) => escapeAttrValue(value)
+	suppressEmptyNode: true,
+	tagValueProcessor: (tagName, tagValue) => escapeValue(tagValue),
+	attributeValueProcessor: (name, value) => escapeAttrValue(value)
 }
 
 function xml2obj(data, options) {
-	return xmlParser.parse(data, Object.assign({}, xml2jsonOptions, options))
+	const xmlParser = new XMLParser({ ...xml2jsonOptions, ...options })
+	return xmlParser.parse(data)
 }
 
 function obj2xml(data, options) {
-	const parser = new Parser(Object.assign({}, json2xmlOptions, options))
-	return parser.parse(data)
+	const builder = new XMLBuilder({ ...json2xmlOptions, ...options })
+	return builder.build(data)
 }
 
 function validate(data) {
-	return xmlParser.validate(data)
+	return XMLValidator.validate(data)
 }
 
 function escapeValue(value) {
@@ -119,6 +121,11 @@ function escapeAttrValue(value) {
 		})
 	}
 	return value
+}
+
+function removeProcessingInstructions(xmlBuf) {
+	const xmlStr = xmlBuf.toString()
+	return Buffer.from(xmlStr.replace(RM_PI_REGEX, ''))
 }
 
 module.exports = {

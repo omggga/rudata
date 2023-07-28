@@ -285,7 +285,7 @@ class Api {
 	getTimeTable(filters, packageData, isQuery) {
 		return this.get(route['getTimeTable'], filters, packageData, isQuery)
 	}
-	
+
 	//Получить данные по купонам
 	getBondCoupons(filters, packageData, isQuery) {
 		return this.get(route['getBondCoupons'], filters, packageData, isQuery)
@@ -368,20 +368,16 @@ class Api {
 
 	async get(optionsConfig, filters, packageData, isQuery) {
 		if (!packageData && !isQuery) {
-			const data = await this.limiter.schedule(() =>
-				this.getData(optionsConfig, filters)
-			)
-			return utils.xml.obj2xml({ 'item-list': { item: data } })
+			const data = await this.limiter.schedule(() => this.getData(optionsConfig, filters))
+			return utils.obj2xml({ 'item-list': { item: data } })
 		}
 
 		let result = []
 
-		for (let filter of filters){
+		for (let filter of filters) {
 			const tag = Object.keys(filter).filter((k) => k.startsWith('@'))
 			try {
-				const data = await this.limiter.schedule(() =>
-					this.getData(optionsConfig, filter)
-				)
+				const data = await this.limiter.schedule(() => this.getData(optionsConfig, filter))
 				if (isQuery) {
 					result.push({ batch: { [tag[0]]: filter[tag[0]], 'item-list': { item: data } } })
 				} else {
@@ -402,13 +398,13 @@ class Api {
 		if (isQuery) {
 			xml = '<result><batch-list>'
 			for (let batch of result) {
-				xml += utils.xml.obj2xml(batch)
+				xml += utils.obj2xml(batch)
 			}
 			xml += '</batch-list></result>'
 		} else {
 			xml = '<list>'
 			for (let res of result) {
-				xml += utils.xml.obj2xml({ 'item-list': res['item-list'] })
+				xml += utils.obj2xml({ 'item-list': res['item-list'] })
 			}
 			xml += '</list>'
 		}
@@ -428,16 +424,16 @@ class Api {
 		let total
 		const requestOptions = this.parseFilters(filters, optionsConfig.defaults)
 		let url = `${config.rudat.url}/${optionsConfig.url}`
-		if (optionsConfig.prependID){
+		if (optionsConfig.prependID) {
 			url += filters[optionsConfig.prependID] + optionsConfig.prependUrl
 		}
-		if (optionsConfig.insertID){
+		if (optionsConfig.insertID) {
 			url += filters[optionsConfig.insertID]
 		}
 		if (optionsConfig.havePages) {
 			total = []
 			let processing = true
-			if(requestOptions.pager) requestOptions.pager.page = 1
+			if (requestOptions.pager) requestOptions.pager.page = 1
 
 			while (processing) {
 				options.body = JSON.stringify(requestOptions)
@@ -451,7 +447,7 @@ class Api {
 				total = total.concat(result)
 
 				//Получили меньше данных, чем минимальное количество на странице - прерываем цикл
-				if (requestOptions.pageSize && requestOptions.pageSize > 0 && result.length < requestOptions.pageSize){
+				if (requestOptions.pageSize && requestOptions.pageSize > 0 && result.length < requestOptions.pageSize) {
 					break
 				}
 				if (requestOptions.pager) requestOptions.pager.page++
@@ -466,7 +462,7 @@ class Api {
 	}
 
 	async request(url, options) {
-		const response = await utils.http.requestUntilSuccess(url, options, 60000)
+		const response = await utils.requestUntilSuccess(url, options, 60000)
 		if (!response.ok) {
 			const errorText = await response.text()
 			throw new Error(`Ошибка! [${response.status}]:${response.statusText}, ${errorText}`)
@@ -478,7 +474,7 @@ class Api {
 		const options = {}
 		for (let [key, value] of Object.entries(filters)) {
 			if (Array.isArray(value)) {
-				//[].concat using to create empty array beacuse if there is only one element in array, utils.xml.xml2obj convert it to object inside
+				//[].concat using to create empty array beacuse if there is only one element in array, util.xml2obj convert it to object inside
 				options[key] = [].concat(value[0][Object.keys(value[0])])
 			} else {
 				options[key] = value

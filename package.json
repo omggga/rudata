@@ -22,5 +22,8 @@
     "mocha": "^10.2.0",
     "prettier": "^1.11.1",
     "pretty-quick": "^1.4.1"
+  },
+  "volta": {
+    "node": "18.16.0"
   }
 }
