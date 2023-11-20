@@ -424,26 +424,27 @@ class Api {
 		return this.request(url, requestOptions)
 	}
 
-	async request(url, options) {
+	async request(url, requestOptions) {
+		const options = {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Authorization: this.token },
+			body: JSON.stringify(requestOptions)
+		}
+
 		const response = await utils.requestUntilSuccess(url, options, 60000)
 		if (!response.ok) {
 			const errorText = await response.text()
-			throw new Error(`Ошибка! [${response.status}]:${response.statusText}, ${errorText}`)
+			throw new Error(`Ошибка! [${response.status}]: ${response.statusText}, ${errorText}`)
 		}
+
 		return response.json()
 	}
 
-	parseFilters(filters, defaults = {}) {
-		const options = {}
-		for (let [key, value] of Object.entries(filters)) {
-			if (Array.isArray(value)) {
-				//[].concat using to create empty array beacuse if there is only one element in array, util.xml2obj convert it to object inside
-				options[key] = [].concat(value[0][Object.keys(value[0])])
-			} else {
-				options[key] = value
-			}
-		}
-		return { ...defaults, ...options }
+	parseFilters(filters) {
+		return Object.entries(filters).reduce((options, [key, value]) => {
+			options[key] = Array.isArray(value) ? value[0][Object.keys(value[0])] : value
+			return options
+		}, {})
 	}
 }
 
