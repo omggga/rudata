@@ -207,25 +207,25 @@ class Api {
 	}
 
 	async login() {
-		const body = {
+		const body = JSON.stringify({
 			login: config.rudat.user,
 			password: config.rudat.pass
-		}
+		})
+
 		const options = {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify(body)
+			headers: { 'Content-Type': 'application/json' },
+			body
 		}
+
 		const response = await utils.requestUntilSuccess(`${config.rudat.url}/Account/Login`, options)
 		if (!response.ok) {
-			throw new Error(`Ошибка! [${response.status}]:${response.statusText}`)
+			throw new Error(`Ошибка! [${response.status}]: ${response.statusText}`)
 		}
 
 		const result = await response.json()
 		if (!result.token) {
-			throw new Error(`Ошибка при получении авторизационного токена, ответ не содержит переменной token`)
+			throw new Error('Ошибка при получении авторизационного токена, ответ не содержит переменной token')
 		}
 
 		this.token = `Bearer ${result.token}`
@@ -373,92 +373,55 @@ class Api {
 		}
 
 		let result = []
-
-		for (let filter of filters) {
-			const tag = Object.keys(filter).filter((k) => k.startsWith('@'))
+		for (const filter of filters) {
+			const tag = Object.keys(filter).find((k) => k.startsWith('@'))
 			try {
 				const data = await this.limiter.schedule(() => this.getData(optionsConfig, filter))
-				if (isQuery) {
-					result.push({ batch: { [tag[0]]: filter[tag[0]], 'item-list': { item: data } } })
-				} else {
-					result.push({ 'item-list': { '@tag': filter[tag[0]], '@err': 0, item: data } })
-				}
+				const batchData = isQuery
+					? { batch: { [tag]: filter[tag], 'item-list': { item: data } } }
+					: { 'item-list': { '@tag': filter[tag], '@err': 0, item: data } }
+
+				result.push(batchData)
 			} catch (err) {
-				if (isQuery) {
-					result.push({
-						batch: { [tag[0]]: filter[tag[0]], error: err.toString() }
-					})
-				} else {
-					result.push({ 'item-list': { '@tag': filter[tag[0]], '@err': 1, error: err.toString() } })
-				}
+				const errorData = isQuery
+					? { batch: { [tag]: filter[tag], error: err.toString() } }
+					: { 'item-list': { '@tag': filter[tag], '@err': 1, error: err.toString() } }
+
+				result.push(errorData)
 			}
 		}
 
-		let xml = ''
-		if (isQuery) {
-			xml = '<result><batch-list>'
-			for (let batch of result) {
-				xml += utils.obj2xml(batch)
-			}
-			xml += '</batch-list></result>'
-		} else {
-			xml = '<list>'
-			for (let res of result) {
-				xml += utils.obj2xml({ 'item-list': res['item-list'] })
-			}
-			xml += '</list>'
-		}
-
-		return xml
+		return utils.obj2xml(isQuery ? { 'batch-list': result } : { list: result })
 	}
 
 	async getData(optionsConfig, filters) {
-		const options = {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: this.token
-			}
-		}
-
-		let total
-		const requestOptions = this.parseFilters(filters, optionsConfig.defaults)
+		const requestOptions = { ...optionsConfig.defaults, ...this.parseFilters(filters) }
 		let url = `${config.rudat.url}/${optionsConfig.url}`
+
 		if (optionsConfig.prependID) {
-			url += filters[optionsConfig.prependID] + optionsConfig.prependUrl
-		}
-		if (optionsConfig.insertID) {
+			url += `${filters[optionsConfig.prependID]}${optionsConfig.prependUrl}`
+		} else if (optionsConfig.insertID) {
 			url += filters[optionsConfig.insertID]
 		}
+
 		if (optionsConfig.havePages) {
-			total = []
+			let pageNum = 1
+			let total = []
 			let processing = true
-			if (requestOptions.pager) requestOptions.pager.page = 1
 
 			while (processing) {
-				options.body = JSON.stringify(requestOptions)
-				let result = await this.request(url, options)
-				if (!Array.isArray(result)) {
-					if (result.timeTableFields) result = result.timeTableFields
-				}
-				if (result.length === 0) {
-					break
-				}
-				total = total.concat(result)
-
-				//Получили меньше данных, чем минимальное количество на странице - прерываем цикл
-				if (requestOptions.pageSize && requestOptions.pageSize > 0 && result.length < requestOptions.pageSize) {
-					break
-				}
-				if (requestOptions.pager) requestOptions.pager.page++
-				if (requestOptions.pageNum) requestOptions.pageNum++
+				requestOptions.pageNum = pageNum
+				const data = await this.request(url, requestOptions)
+				if (Array.isArray(data) && data.length === 0) break
+				total = [...total, ...data]
+				if (data.length < requestOptions.pageSize) break
+				pageNum++
 			}
-		} else {
-			options.body = JSON.stringify(requestOptions)
-			total = await this.request(url, options)
+
+			return total
 		}
 
-		return total
+		return this.request(url, requestOptions)
 	}
 
 	async request(url, options) {
