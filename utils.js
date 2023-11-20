@@ -1,8 +1,6 @@
-'use strict'
-
-const fetch = require('node-fetch')
-const AbortController = require('abort-controller')
-const { XMLParser, XMLBuilder, XMLValidator } = require('fast-xml-parser')
+import fetch from 'node-fetch'
+import AbortController from 'abort-controller'
+import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
 
 const RM_PI_REGEX = /<\?(?!xml ).*?\?>[\r\n]*/g
 
@@ -18,46 +16,35 @@ const defaultRetryOptions = {
 
 async function request(url, opts, timeout = 30000) {
 	const controller = new AbortController()
-	const signal = controller.signal
+	const { signal } = controller
 
-	const options = Object.assign({}, defaultProps, { signal }, opts)
-	const requestTimeout = setTimeout(() => {
-		controller.abort()
-	}, timeout)
+	const options = { ...defaultProps, signal, ...opts }
+	const requestTimeout = setTimeout(() => controller.abort(), timeout)
 
 	try {
-		const response = await fetch(url, options)
-		return response
+		return await fetch(url, options)
 	} finally {
 		clearTimeout(requestTimeout)
 	}
 }
 
-function requestUntilSuccess(url, options, timeout = 30000, retryOptions) {
-	const retryOpts = Object.assign({}, defaultRetryOptions, retryOptions)
-	return execUntilSuccess(request, this, [url, options, timeout], retryOpts)()
+async function requestUntilSuccess(url, options, timeout = 30000, retryOptions = {}) {
+	const retryOpts = { ...defaultRetryOptions, ...retryOptions }
+	return execUntilSuccess(request, null, [url, options, timeout], retryOpts)()
 }
 
-function execUntilSuccess(fn, thisCtx, args, options) {
+async function execUntilSuccess(fn, thisCtx, args, { attemptsLimit, interval }) {
 	let attempts = 0
-
-	return async function exec() {
+	const exec = async () => {
 		try {
 			return await fn.apply(thisCtx, args)
 		} catch (err) {
-			if (++attempts > options.attemptsLimit) throw err
-
-			return new Promise((resolve, reject) => {
-				setTimeout(async () => {
-					try {
-						return resolve(await exec())
-					} catch (err) {
-						return reject(err)
-					}
-				}, options.interval)
-			})
+			if (++attempts > attemptsLimit) throw err
+			await new Promise((resolve) => setTimeout(resolve, interval))
+			return exec()
 		}
 	}
+	return exec()
 }
 
 const xml2jsonOptions = {
@@ -66,72 +53,34 @@ const xml2jsonOptions = {
 }
 
 const json2xmlOptions = {
-	attributeNamePrefix: '@',
-	ignoreAttributes: false,
+	...xml2jsonOptions,
 	suppressEmptyNode: true,
 	tagValueProcessor: (tagName, tagValue) => escapeValue(tagValue),
 	attributeValueProcessor: (name, value) => escapeAttrValue(value)
 }
 
-function xml2obj(data, options) {
-	const xmlParser = new XMLParser({ ...xml2jsonOptions, ...options })
-	return xmlParser.parse(data)
-}
+const xml2obj = (data, options = {}) => new XMLParser({ ...xml2jsonOptions, ...options }).parse(data)
 
-function obj2xml(data, options) {
-	const builder = new XMLBuilder({ ...json2xmlOptions, ...options })
-	return builder.build(data)
-}
+const obj2xml = (data, options = {}) => new XMLBuilder({ ...json2xmlOptions, ...options }).build(data)
 
-function validate(data) {
-	return XMLValidator.validate(data)
-}
+const validate = XMLValidator.validate
 
-function escapeValue(value) {
-	if (typeof value === 'string') {
-		return value.replace(/&(?!(?:apos|quot|[gl]t|amp);|#)|>|</g, function(char) {
-			switch (char) {
-				case '&':
-					return '&amp;'
-				case '>':
-					return '&gt;'
-				case '<':
-					return '&lt;'
-			}
-		})
-	}
-	return value
-}
+const escapeValue = (value) =>
+	typeof value === 'string'
+		? value.replace(
+				/&(?!(?:apos|quot|[gl]t|amp);|#)|>|</g,
+				(char) => ({ '&': '&amp;', '>': '&gt;', '<': '&lt;' }[char])
+		  )
+		: value
 
-function escapeAttrValue(value) {
-	if (typeof value === 'string') {
-		return value.replace(/&(?!(?:apos|quot|[gl]t|amp);|#)|>|<|"|'/g, function(char) {
-			switch (char) {
-				case '&':
-					return '&amp;'
-				case '>':
-					return '&gt;'
-				case '<':
-					return '&lt;'
-				case '"':
-					return '&quot;'
-				case "'":
-					return '&apos;'
-			}
-		})
-	}
-	return value
-}
+const escapeAttrValue = (value) =>
+	typeof value === 'string'
+		? value.replace(
+				/&(?!(?:apos|quot|[gl]t|amp);|#)|>|<|"|'/g,
+				(char) => ({ '&': '&amp;', '>': '&gt;', '<': '&lt;', '"': '&quot;', "'": '&apos;' }[char])
+		  )
+		: value
 
-function removeProcessingInstructions(xmlBuf) {
-	const xmlStr = xmlBuf.toString()
-	return Buffer.from(xmlStr.replace(RM_PI_REGEX, ''))
-}
+const removeProcessingInstructions = (xmlBuf) => Buffer.from(xmlBuf.toString().replace(RM_PI_REGEX, ''))
 
-module.exports = {
-	request,
-	requestUntilSuccess,
-	execUntilSuccess,
-	xml2obj,
-	obj2xml
-}
+export { request, requestUntilSuccess, execUntilSuccess, xml2obj, obj2xml }
